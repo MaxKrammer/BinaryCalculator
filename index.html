@@ -1,375 +1,135 @@
 <!doctype html>
 <html lang="es">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark light" />
-    <title>Binary & Base Calculator</title>
-    <!-- Tailwind (Play CDN) for quick no-build styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      // Optional Tailwind config extension (kept minimal)
-      window.tailwind = window.tailwind || {};
-      tailwind.config = { theme: { extend: {} } };
-    </script>
-    <!-- React 18 + ReactDOM from CDN -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Babel Standalone to transpile JSX in the browser (easy demo deployment) -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  </head>
-  <body class="min-h-screen bg-zinc-950 text-zinc-100 antialiased">
-    <div id="root"></div>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Binary Calculator — Paso 1</title>
+  <style>
+    :root{color-scheme:dark light;--bg:#0b0b0c;--fg:#e6e7eb;--muted:#a1a1aa;--card:#151518;--border:#26262a;--ok:#10b981;--err:#f43f5e}
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(#0b0b0c,#101013);color:var(--fg);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:800px;margin:0 auto;padding:24px 16px 56px}
+    h1{margin:0 0 8px;font-size:1.8rem}
+    p.lead{margin:0 0 16px;color:var(--muted)}
+    .card{background:rgba(21,21,24,.9);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+    .grid{display:grid;gap:12px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    label{color:var(--muted);font-size:.95rem}
+    input,select,.ro{width:100%;border:1px solid var(--border);background:#19191d;color:var(--fg);padding:10px 12px;border-radius:12px;outline:none}
+    input:focus{border-color:var(--ok)}
+    .ro{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,Monaco,monospace}
+    .error{color:var(--err);font-size:.9rem}
+    .leds{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .led{width:22px;height:22px;border-radius:999px;border:1px solid #2a2a2e;background:#1f1f23;box-shadow:inset 0 0 6px rgba(0,0,0,.5)}
+    .led.on{background:rgba(16,185,129,.9);border-color:#16a34a;box-shadow:0 0 12px rgba(16,185,129,.8)}
+    .badge{display:inline-block;padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:#19191d;color:var(--muted);font-size:.85rem}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Binary Calculator — Paso 1</h1>
+      <p class="lead">Convierte de <strong>decimal</strong> a <strong>binario</strong> y muéstralo como texto y en una tira de "LEDs" binarios. (Luego añadimos más bases y operaciones).</p>
+    </header>
 
-    <script type="text/babel" data-presets="react">
-      // Pull React hooks from global React
-      const { useMemo, useState } = React;
-
-      function classNames(...xs) {
-        return xs.filter(Boolean).join(" ");
-      }
-
-      const BASES = [
-        { label: "BIN", base: 2 },
-        { label: "OCT", base: 8 },
-        { label: "DEC", base: 10 },
-        { label: "HEX", base: 16 },
-      ];
-
-      const LED_WIDTHS = ["Auto", 8, 16, 32, 64];
-
-      function regexForBase(base) {
-        switch (base) {
-          case 2:  return /^-?[01]+$/i;
-          case 8:  return /^-?[0-7]+$/i;
-          case 10: return /^-?\d+$/;
-          case 16: return /^-?[0-9a-f]+$/i;
-          default: return /^-?\d+$/;
-        }
-      }
-
-      function parseToBigInt(str, base) {
-        if (typeof str !== "string" || !str.trim()) return null;
-        const trimmed = str.trim();
-        if (!regexForBase(base).test(trimmed)) return null;
-        try {
-          const isNeg = trimmed.startsWith("-");
-          const body = isNeg ? trimmed.slice(1) : trimmed;
-          let value;
-          if (base === 10) {
-            value = BigInt(body);
-          } else {
-            const digits = body.toLowerCase();
-            const map = new Map(Array.from("0123456789abcdefghijklmnopqrstuvwxyz").map((c, i) => [c, i]));
-            let acc = 0n;
-            const B = BigInt(base);
-            for (const ch of digits) {
-              const v = map.get(ch);
-              if (v == null || v >= base) return null;
-              acc = acc * B + BigInt(v);
-            }
-            value = acc;
-          }
-          return isNeg ? -value : value;
-        } catch {
-          return null;
-        }
-      }
-
-      function bigintToString(value, base) {
-        if (value == null) return "";
-        const isNeg = value < 0n;
-        const abs = isNeg ? -value : value;
-        let s = abs.toString(base);
-        if (base === 16) s = s.toUpperCase();
-        return (isNeg ? "-" : "") + s;
-      }
-
-      function toAllBases(value) {
-        if (value == null) return null;
-        return {
-          bin: bigintToString(value, 2),
-          oct: bigintToString(value, 8),
-          dec: bigintToString(value, 10),
-          hex: bigintToString(value, 16),
-        };
-      }
-
-      function padBinary(binStr, width) {
-        const sign = binStr.startsWith("-") ? "-" : "";
-        const raw = sign ? binStr.slice(1) : binStr;
-        if (width === "Auto") return (sign ? "-" : "") + raw;
-        const w = Number(width);
-        const padded = raw.padStart(Math.max(w, raw.length), "0");
-        return (sign ? "-" : "") + padded;
-      }
-
-      function LEDBar({ bin, width }) {
-        if (!bin) return null;
-        const padded = padBinary(bin, width);
-        const isNeg = padded.startsWith("-");
-        const raw = isNeg ? padded.slice(1) : padded;
-        return (
-          <div className="mt-4">
-            {isNeg && (
-              <div className="mb-2 text-sm text-rose-400 font-medium">Sign: −</div>
-            )}
-            <div className="flex flex-wrap gap-2">
-              {raw.split("").map((bit, idx) => (
-                <div
-                  key={idx}
-                  className={classNames(
-                    "w-6 h-6 rounded-full border transition-shadow duration-200",
-                    bit === "1"
-                      ? "bg-emerald-400/90 border-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.8)]"
-                      : "bg-zinc-800 border-zinc-700"
-                  )}
-                  title={\`bit \${raw.length - 1 - idx}: \${bit}\`}
-                  aria-label={\`bit \${raw.length - 1 - idx}: \${bit}\`}
-                />
-              ))}
-            </div>
-            <div className="mt-2 text-xs text-zinc-400">
-              {width === "Auto" ? "Auto width" : \`\${raw.length} bits (target \${width})\`}
-            </div>
-          </div>
-        );
-      }
-
-      function ReadOnlyField({ label, value, mono }) {
-        return (
+    <main class="grid">
+      <section class="card grid">
+        <div class="grid" style="grid-template-columns:1fr 1fr;gap:12px">
           <div>
-            <label className="block text-xs text-zinc-400 mb-1">{label}</label>
-            <div
-              className={classNames(
-                "w-full px-3 py-2 rounded-lg border bg-zinc-800/80 text-sm",
-                mono ? "font-mono tracking-tight" : "",
-                "border-zinc-700"
-              )}
-            >
-              {value}
-            </div>
+            <label for="dec">Número (DEC)</label>
+            <input id="dec" value="42" placeholder="p.ej. 42 o -13" />
+            <div id="err" class="error" style="display:none"></div>
           </div>
-        );
-      }
-
-      function Field({ label, value, onChange, placeholder }) {
-        return (
           <div>
-            <label className="block text-sm mb-1 text-zinc-400">{label}</label>
-            <input
-              spellCheck={false}
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              placeholder={placeholder}
-              className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 focus:outline-none focus:border-emerald-500"
-            />
+            <label>BIN (texto)</label>
+            <div id="binText" class="ro">—</div>
           </div>
-        );
+        </div>
+
+        <div class="row">
+          <label for="width">Ancho de LEDs</label>
+          <select id="width">
+            <option value="auto">Auto</option>
+            <option>8</option><option>16</option><option>32</option><option>64</option>
+          </select>
+          <span id="bitsInfo" class="badge"></span>
+        </div>
+
+        <div id="leds" class="leds" aria-live="polite"></div>
+      </section>
+
+      <footer class="card" style="padding:12px"><small>Soporta negativos con "-". La longitud de la tira puede fijarse o dejar en Auto. Próximo paso: soportar entrada en BIN/OCT/HEX y mostrar todas las conversiones.</small></footer>
+    </main>
+  </div>
+
+  <script>
+    // --- Utilidades de número/base ---
+    function parseDecimal(str){
+      if(typeof str!=="string"||!str.trim()) return null;
+      const t=str.trim();
+      if(!/^-?\d+$/.test(t)) return null; // solo dígitos y signo opcional
+      try{ return BigInt(t); }catch{ return null; }
+    }
+    function bigintToBin(n){
+      if(n===null) return "";
+      const neg = n<0n; const abs = neg? -n : n;
+      const s = abs.toString(2); // binario
+      return (neg?"-":"")+s;
+    }
+    function padBinary(bin, width){
+      const neg = bin.startsWith("-");
+      const raw = neg? bin.slice(1): bin;
+      if(width==="auto") return (neg?"-":"")+raw;
+      const w = Number(width);
+      const padded = raw.padStart(Math.max(w, raw.length), "0");
+      return (neg?"-":"")+padded;
+    }
+
+    // --- Render de LEDs ---
+    function renderLEDs(bin, width, stripEl, infoEl){
+      stripEl.innerHTML="";
+      if(!bin){ infoEl.textContent=""; return; }
+      const padded = padBinary(bin, width);
+      const neg = padded.startsWith("-");
+      const raw = neg? padded.slice(1): padded;
+      if(neg){
+        const badge=document.createElement("span");
+        badge.className="badge"; badge.textContent="Sign: −";
+        stripEl.appendChild(badge);
       }
-
-      function regexForBaseForError(base) {
-        return base;
+      for(let i=0;i<raw.length;i++){
+        const bit=raw[i];
+        const led=document.createElement("div");
+        led.className = "led" + (bit==="1"?" on":"");
+        led.title = `bit ${raw.length-1-i}: ${bit}`;
+        stripEl.appendChild(led);
       }
+      infoEl.textContent = width==="auto"? "Auto width" : `${raw.length} bits (target ${width})`;
+    }
 
-      function ConverterCard() {
-        const [inBase, setInBase] = useState(10);
-        const [text, setText] = useState("42");
-        const [ledWidth, setLedWidth] = useState("Auto");
+    // --- Wiring de UI ---
+    const $dec = document.getElementById("dec");
+    const $err = document.getElementById("err");
+    const $binText = document.getElementById("binText");
+    const $width = document.getElementById("width");
+    const $leds = document.getElementById("leds");
+    const $bitsInfo = document.getElementById("bitsInfo");
 
-        const value = useMemo(() => parseToBigInt(text, inBase), [text, inBase]);
-        const all = useMemo(() => toAllBases(value), [value]);
-        const isValid = value !== null;
+    function update(){
+      const n = parseDecimal($dec.value);
+      const ok = n!==null;
+      $err.style.display = ok? "none" : "block";
+      $err.textContent = ok? "" : "Introduce solo enteros decimales (puede llevar signo).";
+      const bin = ok? bigintToBin(n): "";
+      $binText.textContent = bin || "—";
+      renderLEDs(bin, $width.value, $leds, $bitsInfo);
+    }
 
-        return (
-          <div className="p-4 md:p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-lg">
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <h2 className="text-lg md:text-xl font-semibold">Base Converter</h2>
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-zinc-400">Input base</label>
-                <select
-                  className="px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-sm"
-                  value={inBase}
-                  onChange={(e) => setInBase(Number(e.target.value))}
-                >
-                  {BASES.map((b) => (
-                    <option key={b.base} value={b.base}>
-                      {b.label} ({b.base})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+    $dec.addEventListener("input", update);
+    $width.addEventListener("change", update);
 
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm mb-1 text-zinc-400">Number</label>
-                <input
-                  spellCheck={false}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder={inBase === 16 ? "e.g. FF" : inBase === 2 ? "e.g. 101010" : "e.g. 42"}
-                  className={classNames(
-                    "w-full px-4 py-3 rounded-xl bg-zinc-800 border focus:outline-none",
-                    isValid
-                      ? "border-zinc-700 focus:border-emerald-500"
-                      : "border-rose-700 focus:border-rose-500"
-                  )}
-                  aria-invalid={!isValid}
-                />
-                {!isValid && (
-                  <p className="mt-1 text-sm text-rose-400">
-                    Invalid digits for base {inBase}.
-                  </p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <ReadOnlyField label="BIN (2)" value={all?.bin ?? "—"} mono />
-                <ReadOnlyField label="OCT (8)" value={all?.oct ?? "—"} mono />
-                <ReadOnlyField label="DEC (10)" value={all?.dec ?? "—"} mono />
-                <ReadOnlyField label="HEX (16)" value={all?.hex ?? "—"} mono />
-              </div>
-            </div>
-
-            <div className="mt-4 flex items-center gap-3">
-              <label className="text-sm text-zinc-400">LED width</label>
-              <select
-                className="px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-sm"
-                value={String(ledWidth)}
-                onChange={(e) =>
-                  setLedWidth(e.target.value === "Auto" ? "Auto" : Number(e.target.value))
-                }
-              >
-                {LED_WIDTHS.map((w) => (
-                  <option key={String(w)} value={String(w)}>
-                    {String(w)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <LEDBar bin={all?.bin} width={ledWidth} />
-          </div>
-        );
-      }
-
-      function OperationsCard() {
-        const [base, setBase] = useState(10);
-        const [a, setA] = useState("15");
-        const [b, setB] = useState("3");
-        const [op, setOp] = useState("+");
-
-        const aVal = useMemo(() => parseToBigInt(a, base), [a, base]);
-        const bVal = useMemo(() => parseToBigInt(b, base), [b, base]);
-
-        const error = useMemo(() => {
-          if (aVal === null) return \`A: invalid digits for base \${base}\`;
-          if (bVal === null) return \`B: invalid digits for base \${base}\`;
-          if (op === "/" && bVal === 0n) return "Division by zero";
-          return null;
-        }, [aVal, bVal, base, op]);
-
-        const result = useMemo(() => {
-          if (error) return null;
-          if (aVal === null || bVal === null) return null;
-          switch (op) {
-            case "+": return aVal + bVal;
-            case "-": return aVal - bVal;
-            case "×": return aVal * bVal;
-            case "/": return aVal / bVal; // integer division
-            default:  return null;
-          }
-        }, [aVal, bVal, op, error]);
-
-        const all = useMemo(() => toAllBases(result), [result]);
-
-        return (
-          <div className="p-4 md:p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-lg">
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <h2 className="text-lg md:text-xl font-semibold">Arithmetic</h2>
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-zinc-400">Base</label>
-                <select
-                  className="px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-sm"
-                  value={base}
-                  onChange={(e) => setBase(Number(e.target.value))}
-                >
-                  {BASES.map((b) => (
-                    <option key={b.base} value={b.base}>
-                      {b.label} ({b.base})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid md:grid-cols-[1fr_auto_1fr_auto_auto] items-end gap-3">
-              <Field
-                label="A"
-                value={a}
-                onChange={setA}
-                placeholder="e.g. 1011 / 13 / D"
-              />
-              <div className="pb-2 text-xl font-semibold text-center">{op}</div>
-              <Field
-                label="B"
-                value={b}
-                onChange={setB}
-                placeholder="e.g. 10 / 2 / A"
-              />
-              <select
-                className="px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-sm"
-                value={op}
-                onChange={(e) => setOp(e.target.value)}
-              >
-                <option value="+">+</option>
-                <option value="-">−</option>
-                <option value="×">×</option>
-                <option value="/">÷</option>
-              </select>
-              <div className="pb-2 text-sm text-zinc-400">(integer)</div>
-            </div>
-
-            {error ? (
-              <p className="mt-3 text-sm text-rose-400">{error}</p>
-            ) : (
-              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-                <ReadOnlyField label="BIN (2)" value={all?.bin ?? "—"} mono />
-                <ReadOnlyField label="OCT (8)" value={all?.oct ?? "—"} mono />
-                <ReadOnlyField label="DEC (10)" value={all?.dec ?? "—"} mono />
-                <ReadOnlyField label="HEX (16)" value={all?.hex ?? "—"} mono />
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      function App() {
-        return (
-          <div className="min-h-screen w-full bg-gradient-to-b from-zinc-950 via-zinc-950 to-zinc-900 text-zinc-100">
-            <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
-              <header className="mb-6 md:mb-10">
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Binary & Base Calculator</h1>
-                <p className="text-zinc-400 mt-2 max-w-2xl">
-                  Convert numbers between bases (BIN, OCT, DEC, HEX), visualize bits with a LED bar,
-                  and perform basic arithmetic in any base (integer math).
-                </p>
-              </header>
-
-              <main className="grid gap-6 md:gap-8">
-                <ConverterCard />
-                <OperationsCard />
-                <footer className="text-xs text-zinc-500 mt-6">
-                  Tips: Use a leading minus to enter negatives. Division is integer division (BigInt).
-                </footer>
-              </main>
-            </div>
-          </div>
-        );
-      }
-
-      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-    </script>
-  </body>
+    // Render inicial
+    update();
+  </script>
+</body>
 </html>
